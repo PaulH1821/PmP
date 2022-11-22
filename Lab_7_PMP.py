@@ -1,58 +1,68 @@
-import arviz as az
-import matplotlib.pyplot as plt
+import math
 
-import numpy as np
 import pymc3 as pm
-import pandas as  pd
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import arviz as az
 
 
-f=pd.read_csv("prices.csv")
-
-if __name__ == "__main__":
-
-    f=pd.read_csv("prices.csv")
-
-
-    price = f['Price'].values
-    speed = f['Speed'].values
-    hardDrive = f['HardDrive'].values
-    ram = f['Ram'].values
-    premium = f['Premium'].values
+df = pd.read_csv('Prices.csv')
+price = np.array(df["Price"])
+speed = np.array(df["Speed"])
+hard_drive = np.log(np.array(df["HardDrive"]))
+ram = np.array(df["Ram"])
+premium = np.array([1 if x == True else 0 for x in df["Premium"]])
 
 
+def Ex_1():
+    with pm.Model() as model:
+        alpha = pm.Normal("alpha", mu=np.mean(price), sd=10)
+        beta1 = pm.Normal("beta_1", mu=-5, sd=10)
+        beta2 = pm.Normal("beta_2", mu=8, sd=12)
+        sigma = pm.HalfCauchy("sigma", np.std(price))
+        miu = alpha + beta1 * speed + beta2 * hard_drive
 
-    fig, axes = plt.subplots(2, 2, sharex=False, figsize=(10, 8))
-    axes[0,0].scatter(speed, price, alpha=0.6)
-    axes[0,1].scatter(hardDrive, price, alpha=0.6)
-    axes[1,0].scatter(ram, price, alpha=0.6)
-    axes[1,1].scatter(premium, price, alpha=0.6)
-    axes[0,0].set_ylabel("Price")
-    axes[0,0].set_xlabel("Speed")
-    axes[0,1].set_xlabel("HardDrive")
-    axes[1,0].set_xlabel("Ram")
-    axes[1,1].set_xlabel("Premium")
-    plt.savefig('price_correlations.png')
+        y_pred = pm.Normal("y_pred", mu=miu, sd=sigma, observed=price)
+        idata_g = pm.sample(2000, tune=2000, return_inferencedata=True)
 
-    model = pm.Model()
+    az.plot_trace(idata_g, var_names=["alpha", "beta_1", "beta_2", "sigma"])
+    plt.show()
 
-    with model:
-    
-        a = pm.Normal('a',mu=0,sd=10 )
+    return idata_g, model
 
-        bspeed=pm.Normal('bspeed', mu=0, sd=10)
-        bhard=pm.Normal('bhard', mu=0, sd=10)
 
-        sigma = pm.HalfNormal('sigma', sd=1)
+def Ex_3():
+    result = Ex_1()
+    idata_g = result[0]
+    model = result[1]
 
-        mu = pm.Deterministic('mu', a + bspeed * speed + bhard * np.log(hardDrive))
+    ppc = pm.sample_posterior_predictive(idata_g, samples=100, model=model)
+    correlation = az.r2_score(price, ppc["y_pred"])
+    print(correlation)
 
-        price_like = pm.Normal('price_like', mu=mu, sd=sigma, observed = price)
 
-        trace = pm.sample(200, tune=200, cores=4)
+def Ex_4_and_5():
+    x1 = [33 for i in price]
+    x2 = [np.log(540) for i in price]
 
-        a_mean = trace['a'].mean().item()
-        bspeed_mean= trace['bspeed'].mean().item()
-        bhard_mean= trace['bhard'].mean().item()
+    with pm.Model as model:
+        alpha = pm.Normal("alpha", mu=np.mean(price), sd=2)
+        beta1 = pm.Normal("beta_1", mu=-5, sd=10)
+        beta2 = pm.Normal("beta_2", mu=8, sd=12)
+        sigma = pm.HalfCauchy("sigma", np.std(price))
+        miu = pm.Deterministic("miu", alpha + beta1 * x1 + beta2 * x2)
 
-        
+        y_pred = pm.Normal("y_pred", mu=miu, sd=sigma, observed=price)
+        idata_g = pm.sample(5000, tune=5000, return_inferencedata=True)
+
+    az.plot_trace(idata_g, var_names=["alpha", "beta_1", "beta_2", "sigma"])
+    plt.show()
+
+
+
+
+Ex_1()
+# ex3()
+# ex_4_and_5()
 
